@@ -1,45 +1,67 @@
+/* Full-page base layout: ensure the page fills the viewport height and width. */
 body {
   height: 100%;
   width: 100%; }
 
+/* Center-align the header, footer, and any element with class .center. */
 header, footer, .center {
   text-align: center; }
 
+/* Table cells: minimal vertical padding, constrained width, and horizontal
+   scroll for long content (e.g. long filenames) rather than wrapping. */
 th, td {
   padding: 2px 15px;
   max-width: 200px;
   overflow: auto;
   white-space: nowrap; }
 
+/* Remove default bottom margin on headings and list elements so the torrent
+   detail panel stays compact. */
 h2, h3, h4, h5, h6, ul, li {
   margin-bottom: 0; }
 
+/* Small top margin above the footer to separate it from page content. */
 footer {
   margin-top: 10px; }
 
+/* Override Skeleton's fixed max-width container to use 95% of the viewport,
+   giving the torrent grid as much horizontal space as possible. */
 .container {
   width: 95%;
   max-width: 95%; }
 
+/* The ui-grid torrent table: full width with a fixed height so it doesn't
+   collapse when no torrents are present and doesn't grow unbounded when many
+   are active. margin-bottom provides spacing before the detail panel. */
 .grid {
   margin-bottom: 20px;
   width: 100%;
   height: 200px; }
 
+/* Version badge next to the βTorrent heading: muted colour, smaller font. */
 .version {
   color: #ccc;
   font-size: 0.3em; }
 
+/* View mode navigation links (Full / Single Download / Stream): pull the
+   links up slightly so they sit closer to the heading. */
 .views {
   margin-top: -20px;
   margin-bottom: 10px; }
 
+/* Download button in the full view: left margin to visually separate it
+   from the magnet input field. */
 .download-button {
   margin-left: 10px; }
 
+/* Utility class: remove all margins (used on forms inside panels). */
 .no-margin {
   margin: 0px; }
 
+/* Full-page spinner overlay displayed while WebTorrent is processing an
+   operation (adding a magnet, seeding files, etc.). Centred in the viewport
+   with a semi-transparent grey rounded background. z-index 1000 ensures it
+   sits above all other content. */
 .spinner {
   position: absolute;
   top: 30%;
@@ -52,13 +74,21 @@ footer {
   opacity: .8;
   text-align: center; }
 
+/* The FontAwesome spinner icon inside the overlay: vertically centred using
+   the classic position:relative + top:50% + translateY(-50%) technique.
+   Both -webkit-transform and the unprefixed form are included for maximum
+   cross-browser compatibility (older WebKit/Blink, Safari on iOS, etc.).
+   Modern Firefox supports the unprefixed transform without a vendor prefix. */
 .spinner-icon {
   position: relative;
   top: 50%;
   margin-top: -100px;
   font-size: 200px;
+  -webkit-transform: translateY(-50%);
   transform: translateY(-50%); }
 
+/* Danger button variant (red): used for the "Remove" torrent button.
+   Matches the styling convention of Skeleton's .button-primary pattern. */
 .button.button-danger,
 button.button-danger,
 input[type="submit"].button-danger,
@@ -68,6 +98,8 @@ input[type="button"].button-danger {
   background-color: #D9534F;
   border-color: #D9534F; }
 
+/* Danger button hover and focus states: slightly darker red to give
+   visual feedback on interaction. */
 .button.button-danger:hover,
 button.button-danger:hover,
 input[type="submit"].button-danger:hover,
@@ -82,6 +114,8 @@ input[type="button"].button-danger:focus {
   background-color: #C43E3A;
   border-color: #C43E3A; }
 
+/* Remove underlines from all anchor elements for a cleaner look.
+   Individual links that need underlines should add them explicitly. */
 a {
   text-decoration: none
 }

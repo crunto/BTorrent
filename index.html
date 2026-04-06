@@ -1,6 +1,12 @@
 <!DOCTYPE html>
+<!-- BTorrent: a fully-featured browser-based WebTorrent client.
+     Uses AngularJS for the SPA framework and WebTorrent for P2P over WebRTC.
+     No build step required — served as plain HTML/CSS/JS. -->
 <html ng-app="BTorrent" lang="en">
 <head>
+  <!-- <base href=""> is required by AngularJS html5Mode routing. An empty href
+       means "use the current document's URL as the base", which is effectively
+       a no-op but satisfies Angular's router expectation. -->
   <base href="">
   <meta charset="UTF-8">
   <title>βTorrent: Browser WebTorrent Client</title>
@@ -8,20 +14,41 @@
   <meta name="keywords" content="βTorrent, btorrent, client, webtorrent, browser, torrent, stream, bittorrent, torrenting, sharing, filesharing">
   <meta name="author" content="Diego Rodríguez Baquero - DiegoRBaquero">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <script src="https://cdn.jsdelivr.net/combine/npm/webtorrent/webtorrent.min.js,npm/moment@2,npm/angular@1.5/angular.min.js,npm/angular-route@1.5/angular-route.min.js,npm/angular-sanitize@1.5/angular-sanitize.min.js,npm/angular-ui-grid@3/ui-grid.min.js,gh/matowens/ng-notify/dist/ng-notify.min.js,npm/ng-file-upload@12.2.13/dist/ng-file-upload.min.js"></script>
+  <!-- Vendor scripts loaded via jsDelivr combine URL (single HTTP request).
+       - webtorrent@1: P2P torrent library using WebRTC. Pinned to @1 because
+         this app uses APIs removed in v2: torrentFileBlobURL, getBlobURL(),
+         and appendTo(). Do NOT remove the @1 version pin.
+       - moment@2: Human-readable duration formatting (used by the humanTime filter).
+       - angular@1.5: The SPA framework. Includes ngRoute (client-side routing),
+         ngSanitize (safe HTML binding), ui-grid (torrent data table),
+         ng-notify (toast notifications), and ng-file-upload (file picker buttons). -->
+  <script src="https://cdn.jsdelivr.net/combine/npm/webtorrent@1/webtorrent.min.js,npm/moment@2,npm/angular@1.5/angular.min.js,npm/angular-route@1.5/angular-route.min.js,npm/angular-sanitize@1.5/angular-sanitize.min.js,npm/angular-ui-grid@3/ui-grid.min.js,gh/matowens/ng-notify/dist/ng-notify.min.js,npm/ng-file-upload@12.2.13/dist/ng-file-upload.min.js"></script>
+  <!-- Stylesheets: normalize resets browser defaults, skeleton provides a minimal
+       responsive grid, ng-notify provides toast notification styling. -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/g/normalize@3,skeleton@2,angular.ng-notify@0.8(ng-notify.min.css)">
+  <!-- FontAwesome 4 icon set used for button icons throughout the UI. -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/fontawesome/4/css/font-awesome.min.css">
+  <!-- ui-grid stylesheet required for the torrent data grid in full.html. -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/angular.ui-grid/3/ui-grid.min.css">
   <link rel="stylesheet" href="style.css">
 </head>
+<!-- BTorrentCtrl is the root controller wrapping the entire page. It owns the
+     WebTorrent client instance, global callbacks (onTorrent, onSeed, addMagnet,
+     seedFiles, openTorrentFile), and the 500ms UI refresh interval. -->
 <body ng-controller="BTorrentCtrl" ng-cloak="">
 <header>
   <h1>βTorrent<span class="version"> v{{$root.version}}</span></h1>
+  <!-- View navigation links are only shown when no torrents are active,
+       so the user can switch modes without a cluttered interface. -->
   <div class="views" ng-show="$root.client.torrents.length == 0"><a ng-href="/#">Full</a> | <a ng-href="/download">Single Download</a> | <a ng-href="/view">Stream / View</a></div>
   <div class="aligncenter" style="width: 468px; display: inline-block;">
   </div>
 </header>
+<!-- #viewer is the DOM mount point used by ViewCtrl's file.appendTo('#viewer')
+     calls to embed streamable media (video, audio, images) directly in the page. -->
 <div id="viewer" ng-style="$root.viewerStyle"></div>
+<!-- Angular router outlet: swapped between views/full.html, views/download.html,
+     and views/view.html depending on the current route. -->
 <div id="view" ng-view></div>
 <footer>
   <a class="button" href="https://github.com/DiegoRBaquero/BTorrent/issues" target="_blank"><i class="fa fa-github"></i> Suggest a feature / Report a bug <i class="fa fa-comment"></i></a><br>
@@ -30,6 +57,8 @@
   Powered by <a href="https://github.com/webtorrent/webtorrent" target="_blank">WebTorrent v{{$root.webtorrentVersion}}</a><br>
   </div>
 </footer>
+<!-- Full-page spinner overlay shown while WebTorrent is processing an operation
+     (adding magnet, seeding files, etc.). Controlled by client.processing flag. -->
 <div class="spinner" ng-show="client.processing"><i class="fa fa-spinner fa-spin spinner-icon"></i></div>
 <script src="app.js"></script>
 </body>
