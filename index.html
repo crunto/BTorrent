@@ -15,16 +15,22 @@
   <meta name="author" content="Diego Rodríguez Baquero - DiegoRBaquero">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <!-- Vendor scripts loaded via jsDelivr combine URL (single HTTP request).
-       - webtorrent: P2P torrent library using WebRTC. Loads the v2 UMD browser
-         bundle from dist/webtorrent.min.js. v2 uses native Uint8Array/fetch
-         instead of polyfills, yields a smaller bundle and persistent storage.
-         app.js uses the v2 APIs: torrent.torrentFile (Uint8Array) instead of
-         the removed torrentFileBlobURL, and appendTo() with {autoplay: true}.
-       - moment@2: Human-readable duration formatting (used by the humanTime filter).
-       - angular@1.5: The SPA framework. Includes ngRoute (client-side routing),
-         ngSanitize (safe HTML binding), ui-grid (torrent data table),
-         ng-notify (toast notifications), and ng-file-upload (file picker buttons). -->
-  <script src="https://cdn.jsdelivr.net/combine/npm/webtorrent/dist/webtorrent.min.js,npm/moment@2,npm/angular@1.5/angular.min.js,npm/angular-route@1.5/angular-route.min.js,npm/angular-sanitize@1.5/angular-sanitize.min.js,npm/angular-ui-grid@3/ui-grid.min.js,gh/matowens/ng-notify/dist/ng-notify.min.js,npm/ng-file-upload@12.2.13/dist/ng-file-upload.min.js"></script>
+       All packages are pinned to specific versions whose CDN files are
+       UMD/IIFE bundles loadable as plain <script> tags. Unpinned URLs are
+       avoided because newer releases of several of these packages have
+       moved to ESM-only builds with no UMD bundle.
+
+       - webtorrent@1.9.7: P2P torrent library using WebRTC. v1.9.7 is the
+         LAST WebTorrent release that publishes a UMD browser bundle. v2.x is
+         ESM-only and ships no dist/ bundle on npm — it cannot be loaded via
+         <script> at all without self-bundling. The file is at the package
+         root (webtorrent.min.js), NOT under dist/. Do not move to v2.
+       - moment@2.30.1: Human-readable duration formatting. The /min/moment.min.js
+         path is the explicit UMD build; bare npm/moment@2 fails in combine URLs.
+       - angular@1.5.11 + plugins: SPA framework, routing, sanitizer, ui-grid,
+         ng-notify (toasts), ng-file-upload (file pickers). All are stable
+         AngularJS 1.x IIFE bundles that have not changed format. -->
+  <script src="https://cdn.jsdelivr.net/combine/npm/webtorrent@1.9.7/webtorrent.min.js,npm/moment@2.30.1/min/moment.min.js,npm/angular@1.5.11/angular.min.js,npm/angular-route@1.5.11/angular-route.min.js,npm/angular-sanitize@1.5.11/angular-sanitize.min.js,npm/angular-ui-grid@3/ui-grid.min.js,gh/matowens/ng-notify/dist/ng-notify.min.js,npm/ng-file-upload@12.2.13/dist/ng-file-upload.min.js"></script>
   <!-- Stylesheets: normalize resets browser defaults, skeleton provides a minimal
        responsive grid, ng-notify provides toast notification styling. -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/g/normalize@3,skeleton@2,angular.ng-notify@0.8(ng-notify.min.css)">
