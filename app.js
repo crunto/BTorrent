@@ -217,15 +217,40 @@ app.controller('BTorrentCtrl', ['$scope', '$rootScope', '$http', '$log', '$locat
   }
 
   // ── destroyedTorrent(err) ────────────────────────────────────────────────
-  // Callback passed to torrent.destroy(). Clears the selected torrent and
-  // resets the processing flag so the spinner is hidden.
+  // Callback passed to torrent.destroy(). Revokes all blob: URLs that were
+  // created for this torrent's files and .torrent metadata link, then clears
+  // the selected-torrent reference and hides the spinner.
+  // Revoking is important: URL.createObjectURL() allocates memory that the
+  // browser holds until explicitly released with revokeObjectURL(). Without
+  // this cleanup, every removed torrent leaks its file blobs for the session.
   $rootScope.destroyedTorrent = function (err) {
     if (err) {
       throw err
     }
+    if ($rootScope.selectedTorrent && $rootScope.selectedTorrent._blobURLs) {
+      $rootScope.selectedTorrent._blobURLs.forEach(function (url) {
+        URL.revokeObjectURL(url)
+      })
+    }
     dbg('Destroyed torrent', $rootScope.selectedTorrent)
     $rootScope.selectedTorrent = null
     $rootScope.client.processing = false
+  }
+
+  // ── saveFileToDisk(file) ─────────────────────────────────────────────────
+  // File System Access API path: lets the user pick a save location and pipes
+  // WebTorrent's ReadableStream directly to the file on disk. No RAM buffer
+  // is required regardless of file size. Supported in Chrome 86+, Edge 86+,
+  // and Safari 15.2+. Firefox has formally declined to implement FSAW, so
+  // the blob: URL fallback is used there instead (see onTorrent below).
+  // AbortError is silently swallowed — it means the user cancelled the dialog.
+  $rootScope.saveFileToDisk = function (file) {
+    window.showSaveFilePicker({suggestedName: file.name})
+      .then(function (handle) { return handle.createWritable() })
+      .then(function (writable) { return file.stream().pipeTo(writable) })
+      .catch(function (err) {
+        if (err.name !== 'AbortError') { throw err }
+      })
   }
 
   // ── changePriority(file) ─────────────────────────────────────────────────
@@ -269,27 +294,66 @@ app.controller('BTorrentCtrl', ['$scope', '$rootScope', '$http', '$log', '$locat
       $rootScope.client.processing = false
     }
 
-    // For each file in the torrent, generate a blob: URL so the template can
-    // render a clickable download link. file.blob() (WebTorrent v2 Promise API)
-    // buffers the complete file and resolves with a Blob; we turn it into a
-    // blob: URL with URL.createObjectURL(). file.url is watched by the template
-    // and the download link appears once file.done is true.
+    // Initialise the blob URL registry for this torrent. All URLs created via
+    // URL.createObjectURL() are stored here so destroyedTorrent() can revoke
+    // them and release the associated memory when the torrent is removed.
+    if (!torrent._blobURLs) { torrent._blobURLs = [] }
+    // Register the .torrent metadata blob URL created above.
+    torrent._blobURLs.push(torrent.safeTorrentFileURL)
+
+    // For each file, set up the download control. Two paths based on browser:
+    //
+    // FSAW path (Chrome 86+ / Edge 86+ / Safari 15.2+):
+    //   Mark the file with file.saveHandle so the template renders a "Save to
+    //   disk" button. Clicking it calls saveFileToDisk() which pipes the
+    //   WebTorrent ReadableStream directly to the user's chosen location with
+    //   no RAM buffer — safe for files of any size.
+    //
+    // Fallback path (Firefox and all other browsers):
+    //   Wait for file.blob() to resolve (file is fully downloaded and buffered),
+    //   create a blob: URL, and store it in file.url so the template shows an
+    //   <a download> link. The callback is wrapped in $rootScope.$apply() so
+    //   Angular immediately re-renders the link rather than waiting up to 500ms
+    //   for the next setInterval tick.
     torrent.files.forEach(function (file) {
-      file.blob().then(function (blob) {
-        var url = URL.createObjectURL(blob)
-        if (isSeed) {
-          dbg('Started seeding', torrent)
-          if (!($rootScope.selectedTorrent != null)) {
-            $rootScope.selectedTorrent = torrent
-          }
-          $rootScope.client.processing = false
-        }
-        file.url = url
-        if (!isSeed) {
-          dbg('Done ', file)
-          ngNotify.set(`<b>${file.name}</b> ready for download`, 'success')
-        }
-      }).catch(function (err) { throw err })
+      if (window.showSaveFilePicker) {
+        // FSAW available: mark the file so the template shows the save button
+        // as soon as WebTorrent marks it done. No blob buffering needed.
+        file.blob().then(function () {
+          $rootScope.$apply(function () {
+            file.saveHandle = true
+            if (isSeed) {
+              dbg('Started seeding', torrent)
+              if (!($rootScope.selectedTorrent != null)) {
+                $rootScope.selectedTorrent = torrent
+              }
+              $rootScope.client.processing = false
+            } else {
+              dbg('Done ', file)
+              ngNotify.set(`<b>${file.name}</b> ready for download`, 'success')
+            }
+          })
+        }).catch(function (err) { throw err })
+      } else {
+        // Fallback: buffer the file and expose a blob: URL download link.
+        file.blob().then(function (blob) {
+          var url = URL.createObjectURL(blob)
+          torrent._blobURLs.push(url)
+          $rootScope.$apply(function () {
+            file.url = url
+            if (isSeed) {
+              dbg('Started seeding', torrent)
+              if (!($rootScope.selectedTorrent != null)) {
+                $rootScope.selectedTorrent = torrent
+              }
+              $rootScope.client.processing = false
+            } else {
+              dbg('Done ', file)
+              ngNotify.set(`<b>${file.name}</b> ready for download`, 'success')
+            }
+          })
+        }).catch(function (err) { throw err })
+      }
     })
 
     // 'done' fires when all files have been fully downloaded.
@@ -492,6 +556,9 @@ app.controller('ViewCtrl', ['$scope', '$rootScope', '$http', '$log', '$location'
     dbg('Received metadata', torrent)
     ngNotify.set(`Received ${torrent.name} metadata`)
 
+    if (!torrent._blobURLs) { torrent._blobURLs = [] }
+    torrent._blobURLs.push(torrent.safeTorrentFileURL)
+
     torrent.files.forEach(function (file) {
       // appendTo() streams the file into a media element and appends it to the
       // specified selector. Supports video, audio, and image MIME types.
@@ -499,12 +566,23 @@ app.controller('ViewCtrl', ['$scope', '$rootScope', '$http', '$log', '$location'
       // defaults to true as it did in v1.
       file.appendTo('#viewer', {autoplay: true})
 
-      // Also generate a blob: URL via the v2 Promise API so the file can be
-      // saved via download link if needed.
-      file.blob().then(function (blob) {
-        file.url = URL.createObjectURL(blob)
-        dbg('Done ', file)
-      }).catch(function (err) { throw err })
+      // Also provide a download link for saving the file.
+      // Same FSAW / fallback split as BTorrentCtrl.onTorrent(). Wrapped in
+      // $rootScope.$apply() so the link appears immediately, not after 500ms.
+      if (window.showSaveFilePicker) {
+        file.blob().then(function () {
+          $rootScope.$apply(function () { file.saveHandle = true })
+        }).catch(function (err) { throw err })
+      } else {
+        file.blob().then(function (blob) {
+          var url = URL.createObjectURL(blob)
+          torrent._blobURLs.push(url)
+          $rootScope.$apply(function () {
+            file.url = url
+            dbg('Done ', file)
+          })
+        }).catch(function (err) { throw err })
+      }
     })
 
     torrent.on('done', function () { dbg('Done', torrent) })

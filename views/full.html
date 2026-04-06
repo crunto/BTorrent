@@ -70,11 +70,20 @@
         </thead>
         <tbody>
           <tr class="files" ng-repeat="file in $root.selectedTorrent.files">
-            <!-- Before download completes, show plain text filename. -->
-            <td ng-hide="file.done">{{file.name}}</td>
-            <!-- After download, show as an anchor with the blob URL so the user
-                 can save the file. target="_self" avoids opening a new tab. -->
-            <td ng-show="file.done"><a ng-href="{{file.url}}" download="{{file.name}}" target="_self" ng-show="file.done">{{file.name}}</a></td>
+            <!-- Plain text filename while the file is still downloading.
+                 Gated on file.url (not file.done) because file.done becomes true
+                 when the last byte arrives, but file.url is only set after the blob
+                 is fully buffered. Showing the link before file.url is ready would
+                 produce a broken href. -->
+            <td ng-hide="file.url">{{file.name}}</td>
+            <!-- Once file.url is set (blob buffered or FSAW handle ready), show the
+                 appropriate download control. target="_self" avoids a new tab. -->
+            <td ng-show="file.url"><a ng-href="{{file.url}}" download="{{file.name}}" target="_self">{{file.name}}</a></td>
+            <!-- FSAW path (Chrome/Edge/Safari): stream directly to disk with no RAM
+                 buffer. Shown when the file is done but no blob URL exists yet. -->
+            <td ng-show="file.saveHandle && !file.url">
+              <button ng-click="$root.saveFileToDisk(file)">{{file.name}} <i class="fa fa-save"></i></button>
+            </td>
             <td>{{file.length | pbytes}}</td>
             <!-- Priority select: '1' = high, '0' = low (default), '-1' = deselected.
                  ng-change calls changePriority() which calls file.select(priority)
