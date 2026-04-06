@@ -36,8 +36,10 @@
         <button ng-if="!$root.selectedTorrent.paused" ng-click="$root.selectedTorrent.pause()"><i class="fa fa-pause"></i> Pause</button>
         <button ng-if="$root.selectedTorrent.paused" ng-click="$root.selectedTorrent.resume()"><i class="fa fa-play"></i> Resume</button>
         <!-- destroy() removes the torrent from the client and calls destroyedTorrent
-             to clean up $rootScope.selectedTorrent and the processing flag. -->
-        <button class="button-danger" ng-click="$root.selectedTorrent.destroy($root.destroyedTorrent)"><i class="fa fa-times"></i> Remove</button>
+             to clean up $rootScope.selectedTorrent and the processing flag.
+             {destroyStore: true} tells WebTorrent v2 to also clear the downloaded
+             data from persistent storage (IndexedDB/FSA), preventing unbounded growth. -->
+        <button class="button-danger" ng-click="$root.selectedTorrent.destroy({destroyStore: true}, $root.destroyedTorrent)"><i class="fa fa-times"></i> Remove</button>
       </h5>
       <!-- Share section: provides multiple ways to re-share or reference this torrent. -->
       <h6>Share</h6>
