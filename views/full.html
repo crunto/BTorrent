@@ -1,5 +1,8 @@
 
 <div class="container">
+  <!-- Input row: magnet/hash text entry, torrent file opener, and seed-files picker.
+       All controls are disabled while $root.disabled is true (no WebRTC support)
+       or while a torrent operation is in progress. -->
   <div class="row">
     <div class="four columns">
       <input class="u-full-width" type="text" placeholder="magnet, hash or http(s) .torrent" ng-model="torrentInput" ng-disabled="$root.disabled"/>
@@ -8,29 +11,54 @@
       <button ng-click="addMagnet()" ng-disabled="!torrentInput.length || $root.disabled" ng-class="{'button-primary': torrentInput.length}"><i class="fa fa-download"></i> Download</button>
     </div>
     <div class="three columns">
-      <button type="file" ngf-select="$root.openTorrentFile($file)" ng-disabled="$root.disabled" ng-class="{'button-primary': !$root.disabled}"><i class="fa fa-folder-open"></i> Open torrent file</button>
+      <!-- Note: type="file" is intentionally omitted from this button.
+           Firefox blocks the programmatic click() that ng-file-upload fires on
+           its hidden <input type="file"> when the triggering element itself has
+           type="file". Without the attribute, ngf-select works on all browsers. -->
+      <button ngf-select="$root.openTorrentFile($file)" ng-disabled="$root.disabled" ng-class="{'button-primary': !$root.disabled}"><i class="fa fa-folder-open"></i> Open torrent file</button>
     </div>
     <div class="three columns u-pull-right">
+      <!-- multiple="" allows selecting several files at once to seed as one torrent.
+           When >1 file is chosen, seedFiles() prompts for a torrent name. -->
       <button class="u-pull-right" ngf-select="$root.seedFiles($files)" multiple="" ng-disabled="$root.disabled" ng-class="{'button-primary': !$root.disabled}"><i class="fa fa-upload"></i> Seed files</button>
     </div>
   </div>
+  <!-- Torrent data grid powered by ui-grid. Columns, data source, and row
+       selection behaviour are configured in FullCtrl ($scope.gridOptions).
+       ui-grid-resize-columns allows dragging column dividers to resize. -->
   <div class="row grid" ui-grid="gridOptions" ui-grid-resize-columns="ui-grid-resize-columns" ui-grid-selection="ui-grid-selection"></div>
+  <!-- Detail panel for the currently selected torrent. Hidden when no row is selected. -->
   <div class="row" ng-if="selectedTorrent">
     <div class="six columns" style="overflow: auto">
-      <h5>{{$root.selectedTorrent.name}}  
-        <button ng-if="!$root.selectedTorrent.paused" ng-click="$root.selectedTorrent.pause()"><i class="fa fa-pause"></i> Pause</button> 
-        <button ng-if="$root.selectedTorrent.paused" ng-click="$root.selectedTorrent.resume()"><i class="fa fa-play"></i> Resume</button> 
-        <button class="button-danger" ng-click="$root.selectedTorrent.destroy($root.destroyedTorrent)"><i class="fa fa-times"></i> Remove</button>
+      <h5>{{$root.selectedTorrent.name}}
+        <!-- Pause/Resume toggle: only one button is visible at a time based on
+             the torrent's paused state. -->
+        <button ng-if="!$root.selectedTorrent.paused" ng-click="$root.selectedTorrent.pause()"><i class="fa fa-pause"></i> Pause</button>
+        <button ng-if="$root.selectedTorrent.paused" ng-click="$root.selectedTorrent.resume()"><i class="fa fa-play"></i> Resume</button>
+        <!-- destroy() removes the torrent from the client and calls destroyedTorrent
+             to clean up $rootScope.selectedTorrent and the processing flag.
+             {destroyStore: true} tells WebTorrent v2 to also clear the downloaded
+             data from persistent storage (IndexedDB/FSA), preventing unbounded growth. -->
+        <button class="button-danger" ng-click="$root.selectedTorrent.destroy({destroyStore: true}, $root.destroyedTorrent)"><i class="fa fa-times"></i> Remove</button>
       </h5>
+      <!-- Share section: provides multiple ways to re-share or reference this torrent. -->
       <h6>Share</h6>
       <ul>
+        <!-- Links directly to this site with the info hash as the URL fragment,
+             so anyone clicking it will auto-load the torrent here. -->
         <li><a ng-href="#{{$root.selectedTorrent.infoHash}}" target="_blank">βTorrent</a></li>
+        <!-- Full magnet URI for use in any BitTorrent client. -->
         <li><a ng-href="{{$root.selectedTorrent.magnetURI}}" target="_blank">Magnet URI</a></li>
+        <!-- Download the .torrent metadata file. safeTorrentFileURL is a blob: URL
+             created from the torrent's binary metadata by WebTorrent. -->
         <li><a ng-href="{{$root.selectedTorrent.safeTorrentFileURL}}" target="_self" download="{{$root.selectedTorrent.fileName}}">.torrent</a></li>
         <li><strong>Hash: </strong>{{$root.selectedTorrent.infoHash}} </li>
       </ul>
     </div>
     <div class="six columns">
+      <!-- Files table: lists every file in the torrent with size and priority controls.
+           When a file finishes downloading (file.done), its name becomes a clickable
+           download link using the blob: URL generated by getBlobURL(). -->
       <h5>Files</h5>
       <table class="u-full-width">
         <thead>
@@ -42,9 +70,24 @@
         </thead>
         <tbody>
           <tr class="files" ng-repeat="file in $root.selectedTorrent.files">
-            <td ng-hide="file.done">{{file.name}}</td>
-            <td ng-show="file.done"><a ng-href="{{file.url}}" download="{{file.name}}" target="_self" ng-show="file.done">{{file.name}}</a></td>
+            <!-- Plain text filename while the file is still downloading.
+                 Gated on file.url (not file.done) because file.done becomes true
+                 when the last byte arrives, but file.url is only set after the blob
+                 is fully buffered. Showing the link before file.url is ready would
+                 produce a broken href. -->
+            <td ng-hide="file.url">{{file.name}}</td>
+            <!-- Once file.url is set (blob buffered or FSAW handle ready), show the
+                 appropriate download control. target="_self" avoids a new tab. -->
+            <td ng-show="file.url"><a ng-href="{{file.url}}" download="{{file.name}}" target="_self">{{file.name}}</a></td>
+            <!-- FSAW path (Chrome/Edge/Safari): stream directly to disk with no RAM
+                 buffer. Shown when the file is done but no blob URL exists yet. -->
+            <td ng-show="file.saveHandle && !file.url">
+              <button ng-click="$root.saveFileToDisk(file)">{{file.name}} <i class="fa fa-save"></i></button>
+            </td>
             <td>{{file.length | pbytes}}</td>
+            <!-- Priority select: '1' = high, '0' = low (default), '-1' = deselected.
+                 ng-change calls changePriority() which calls file.select(priority)
+                 or file.deselect() on the WebTorrent file object. -->
             <td>
               <select class="no-margin" name="{{file.name}}Priority" ng-model="file.priority" ng-init="file.priority = '0'" ng-change="$root.changePriority(file)">
                 <option value="1">High Priority</option>
@@ -57,8 +100,9 @@
       </table>
     </div>
   </div>
-  <div class="center"><strong>Client Stats: 
-      ↓ {{$root.client.downloadSpeed | pbytes}}/s · 
-      ↑ {{$root.client.uploadSpeed | pbytes}}/s · 
+  <!-- Client-wide aggregate stats displayed at all times. -->
+  <div class="center"><strong>Client Stats:
+      ↓ {{$root.client.downloadSpeed | pbytes}}/s ·
+      ↑ {{$root.client.uploadSpeed | pbytes}}/s ·
       Ratio: {{$root.client.ratio | number:2}}</strong></div>
 </div>
